@@ -3,8 +3,8 @@ import json
 
 def query_claude_for_sql(user_query):
     """Generate SQL query using Claude (Bedrock)."""
-    bedrock = boto3.client(service_name="bedrock-runtime")
-    region_name="us-east-1"
+    bedrock = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")  # Set region
+
 
     fuel_types = ['', 'Plug-in Hybrid Electric Vehicle', 'Battery Electric Vehicle', 'Butane', 'CNG', 'LNG', 'LPG', 'Natural gas', 'Natural gas (100% mineral blend)', 'Other petroleum gas', 'Propane', 'Aviation spirit', 'Aviation turbine fuel', 'Burning oil', 'Diesel (average biofuel blend)', 'Diesel (100% mineral diesel)', 'Fuel oil', 'Gas oil', 'Lubricants', 'Naphtha', 'Petrol (average biofuel blend)', 'Petrol (100% mineral petrol)', 'Processed fuel oils - residual oil', 'Processed fuel oils - distillate oil', 'Refinery miscellaneous', 'Waste oils', 'Marine gas oil', 'Marine fuel oil', 'Coal (industrial)', 'Coal (electricity generation)', 'Coal (domestic)', 'Coking coal', 'Petroleum coke', 'Coal (electricity generation - home produced coal only)', 'Bioethanol', 'Biodiesel ME', 'Biomethane (compressed)', 'Biodiesel ME (from used cooking oil)', 'Biodiesel ME (from tallow)', 'Biodiesel HVO', 'Biopropane', 'Development diesel', 'Development petrol', 'Off road biodiesel', 'Biomethane (liquified)', 'Methanol (bio)', 'Avtur (renewable)', 'Wood logs', 'Wood chips', 'Wood pellets', 'Grass/straw', 'Biogas', 'Landfill gas', 'Carbon dioxide', 'Methane', 'Nitrous oxide', 'HFC-23', 'HFC-32', 'HFC-41', 'HFC-125', 'HFC-134', 'HFC-134a', 'HFC-143', 'HFC-143a', 'HFC-152a', 'HFC-227ea', 'HFC-236fa', 'HFC-245fa', 'HFC-43-I0mee', 'Perfluoromethane (PFC-14)', 'Perfluoroethane (PFC-116)', 'Perfluoropropane (PFC-218)', 'Perfluorocyclobutane (PFC-318)', 'Perfluorobutane (PFC-3-1-10)', 'Perfluoropentane (PFC-4-1-12)', 'Perfluorohexane (PFC-5-1-14)', 'PFC-9-1-18', 'Perfluorocyclopropane', 'Sulphur hexafluoride (SF6)', 'HFC-152', 'HFC-161', 'HFC-236cb', 'HFC-236ea', 'HFC-245ca', 'HFC-365mfc', 'Nitrogen trifluoride', 'Diesel', 'Hybrid', 'Unknown']
 
