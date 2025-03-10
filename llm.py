@@ -1,18 +1,18 @@
-import boto3 
+import boto3
 import json
+import time
+import botocore.exceptions
 
 def query_claude_for_sql(user_query):
-    """Generate SQL query using Claude (Bedrock)."""
-    bedrock = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")  # Set region
+    """Generate SQL query using Claude (Bedrock) with retry logic to handle throttling."""
+    
+    bedrock = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")  # Set AWS region
 
+    fuel_types = ['', 'Plug-in Hybrid Electric Vehicle', 'Battery Electric Vehicle', 'Butane', 'CNG', 'LNG', 'LPG', 'Natural gas', 'Petrol', 'Diesel']
+    units = ['kWh', 'km', 'miles', 'tonnes', 'litres', 'cubic metres', 'GJ', 'kg']
 
-    fuel_types = ['', 'Plug-in Hybrid Electric Vehicle', 'Battery Electric Vehicle', 'Butane', 'CNG', 'LNG', 'LPG', 'Natural gas', 'Natural gas (100% mineral blend)', 'Other petroleum gas', 'Propane', 'Aviation spirit', 'Aviation turbine fuel', 'Burning oil', 'Diesel (average biofuel blend)', 'Diesel (100% mineral diesel)', 'Fuel oil', 'Gas oil', 'Lubricants', 'Naphtha', 'Petrol (average biofuel blend)', 'Petrol (100% mineral petrol)', 'Processed fuel oils - residual oil', 'Processed fuel oils - distillate oil', 'Refinery miscellaneous', 'Waste oils', 'Marine gas oil', 'Marine fuel oil', 'Coal (industrial)', 'Coal (electricity generation)', 'Coal (domestic)', 'Coking coal', 'Petroleum coke', 'Coal (electricity generation - home produced coal only)', 'Bioethanol', 'Biodiesel ME', 'Biomethane (compressed)', 'Biodiesel ME (from used cooking oil)', 'Biodiesel ME (from tallow)', 'Biodiesel HVO', 'Biopropane', 'Development diesel', 'Development petrol', 'Off road biodiesel', 'Biomethane (liquified)', 'Methanol (bio)', 'Avtur (renewable)', 'Wood logs', 'Wood chips', 'Wood pellets', 'Grass/straw', 'Biogas', 'Landfill gas', 'Carbon dioxide', 'Methane', 'Nitrous oxide', 'HFC-23', 'HFC-32', 'HFC-41', 'HFC-125', 'HFC-134', 'HFC-134a', 'HFC-143', 'HFC-143a', 'HFC-152a', 'HFC-227ea', 'HFC-236fa', 'HFC-245fa', 'HFC-43-I0mee', 'Perfluoromethane (PFC-14)', 'Perfluoroethane (PFC-116)', 'Perfluoropropane (PFC-218)', 'Perfluorocyclobutane (PFC-318)', 'Perfluorobutane (PFC-3-1-10)', 'Perfluoropentane (PFC-4-1-12)', 'Perfluorohexane (PFC-5-1-14)', 'PFC-9-1-18', 'Perfluorocyclopropane', 'Sulphur hexafluoride (SF6)', 'HFC-152', 'HFC-161', 'HFC-236cb', 'HFC-236ea', 'HFC-245ca', 'HFC-365mfc', 'Nitrogen trifluoride', 'Diesel', 'Hybrid', 'Unknown']
-
-    units = ['kWh', 'km', 'miles', 'tonnes', 'litres', 'kWh (Net CV)', 'kWh (Gross CV)', 'cubic metres', 'GJ', 'kg', 'tonne.km', 'million litres', 'passenger.km', 'Room per night', 'per FTE Working Hour']
-
-
-    fuel_types_str = ", ".join(f"'{fuel}'" for fuel in fuel_types)  # Format for SQL query
-    units_str = ", ".join(f"'{unit}'" for unit in units)  # Format units
+    fuel_types_str = ", ".join(f"'{fuel}'" for fuel in fuel_types)  
+    units_str = ", ".join(f"'{unit}'" for unit in units)  
 
     prompt = f"""
     Given the following request: "{user_query}", generate an SQL query.
@@ -38,24 +38,39 @@ def query_claude_for_sql(user_query):
         })
     }
 
-    response = bedrock.invoke_model(
-        body=payload["body"],
-        modelId=payload["modelId"],
-        contentType=payload["contentType"],
-        accept=payload["accept"]
-    )
+    max_retries = 5  # Maximum number of retries
+    backoff_factor = 2  # Exponential backoff factor
+    wait_time = 1  # Initial wait time in seconds
 
-    try:
-        response_body = json.loads(response["body"].read().decode("utf-8"))
-        
-        # Extract text properly, even if it's a list
-        messages = response_body.get("content", [])  # Ensure it's a list
-        if messages and isinstance(messages, list):
-            sql_query = messages[0].get("text", "").strip()  # Extract first text response
-        else:
-            sql_query = None
+    for attempt in range(max_retries):
+        try:
+            response = bedrock.invoke_model(
+                body=payload["body"],
+                modelId=payload["modelId"],
+                contentType=payload["contentType"],
+                accept=payload["accept"]
+            )
 
-        return sql_query
-    except Exception as e:
-        print("Error extracting SQL query:", e)
-        return None
+            response_body = json.loads(response["body"].read().decode("utf-8"))
+            messages = response_body.get("content", [])
+
+            if messages and isinstance(messages, list):
+                sql_query = messages[0].get("text", "").strip()
+            else:
+                sql_query = None
+
+            return sql_query
+
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "ThrottlingException":
+                print(f"ThrottlingException: Too many requests. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+                wait_time *= backoff_factor  # Increase wait time exponentially
+            else:
+                print("AWS Bedrock Client Error:", e)
+                break  # If it's not a throttling error, break the loop
+        except Exception as e:
+            print("Error calling Claude API:", e)
+            break  # Other errors should not be retried
+
+    return None  # Return None if all retries fail
